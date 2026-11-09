@@ -16,7 +16,7 @@ VideoCom handles everything **around** transcoding. The encoding itself is done 
 | Line | Output | Transcoder | VideoCom adds |
 |---|---|---|---|
 | Everyday videos (iPhone, downloads) | MP4 / HEVC | Aagedal Media Converter | Restores GPS, capture date and file dates so the iPhone Photos app recognises them |
-| Movies | MKV / HEVC | [HandBrake](https://handbrake.fr) | Checks every audio / subtitle / attachment / chapter track survived |
+| Movies | MKV (with subtitles) or MP4 (without) / HEVC | [HandBrake](https://handbrake.fr) | Checks every audio / subtitle / attachment / chapter track survived |
 
 1. **Scan** a folder (read-only) and sort each file into *Compress / Skip / Review / Remux only*
 2. See the **estimated output size, time, compression ratio and value (MB saved per minute)** for every file, sorted by what's most worth compressing
@@ -103,7 +103,7 @@ Each category is handled by an engine recorded in the batch (`external:Aagedal`,
 
 ## 中文
 
-VideoCom 负责转码**前后**的工作，转码本身交给 Aagedal（一般视频 → MP4）和 HandBrake（电影 → MKV）。
+VideoCom 负责转码**前后**的工作，转码本身交给 Aagedal（一般视频 → MP4）和 HandBrake（电影：有字幕 → MKV，无字幕 → MP4，分别放在「待压缩」的 MKV / MP4 子文件夹）。
 
 **流程**：扫描（只读）→ 预览分类，显示预计大小、耗时、压缩率、性价比（每分钟能省多少 MB），并按性价比排序 → 确认后移动（可撤销）→ 外部转码 → 收尾：按文件名配对，再用时长和分辨率复核 → 一般视频把 GPS 和拍摄时间写回 `moov/meta`（iPhone「照片」只读这里），最后写文件时间 → 生成报告 → 可选：把原片移到废纸篓（需确认）。
 

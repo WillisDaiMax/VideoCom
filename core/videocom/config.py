@@ -14,7 +14,7 @@ MANIFEST_NAME = "videocom.json"
 MANIFEST_VERSION = 1
 
 LINES = ("daily", "movie")
-LINE_LABEL = {"daily": "一般视频（MP4）", "movie": "电影（MKV）"}
+LINE_LABEL = {"daily": "一般视频（MP4）", "movie": "电影（MKV / MP4）"}
 
 # 桶：每个文件在分类后进入其中一个
 BUCKETS = ("compress", "skip", "review", "remux")
@@ -40,12 +40,15 @@ DEFAULTS = {
     "daily_review": {"spatial_audio": True},
     # 电影线哪些情况进"需人工确认"
     "movie_review": {"dv_profile7": True, "ass_with_fonts": True},
+    # 电影线要压缩的文件分 MP4 / MKV 两个子文件夹：没有字幕、没有附件、音轨 MP4 放得下 → MP4
+    "movie_split_container": True,
+    "movie_mp4_audio": ["aac", "ac3", "eac3", "mp3", "alac"],
     # 预估（estimate.py）。cap_bpp / factor / px_per_s 按 2026-11-09 实测标定，之后由 history.json 自动修正
     "estimate": {
         "daily": {"cap_bpp": 0.03, "px_per_s": 8.5e8,
                   "factor": {"default": 0.55, "hevc": 0.8, "av1": 0.95, "vp9": 0.85,
                              "mpeg2video": 0.45, "mpeg4": 0.5, "msmpeg4v3": 0.5, "wmv3": 0.5}},
-        "movie": {"cap_bpp": 0.03, "px_per_s": 8.5e8,
+        "movie": {"cap_bpp": 0.03, "px_per_s": 3.7e8,
                   "factor": {"default": 0.55, "hevc": 0.8, "av1": 0.95, "vp9": 0.85,
                              "mpeg2video": 0.45, "mpeg4": 0.5, "rv40": 0.55, "rv30": 0.55, "wmv3": 0.5}},
         "copy_mb_per_s": 300,

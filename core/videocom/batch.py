@@ -122,6 +122,8 @@ def set_bucket(m, ids, bucket, subgroup=None, cfg=None):
                 e["subgroup"] = subgroup
             elif bucket != "compress":
                 e["subgroup"] = ""
+            elif m["line"] == "movie" and (cfg or {}).get("movie_split_container", True) and e.get("probe"):
+                e["subgroup"] = classify.movie_container(cfg or config.DEFAULTS, e["probe"])[0].upper()
             e["notes"].append(f"手动改为 {config.BUCKET_LABEL[bucket]}")
             if cfg:
                 estimate.attach(cfg, m, [e])
@@ -266,6 +268,10 @@ def finish(cfg, m):
     if m["stage"] not in ("moved", "finished"):
         raise RuntimeError("请先完成移动")
     r = match(cfg, m)
+    # 之前判失败的（例如旧版不认裁黑边）重新校验一次
+    for e in m["entries"]:
+        if e["state"] == "failed" and e.get("output") and Path(e["output"]).exists():
+            e["state"] = "matched"
     todo = [e for e in m["entries"] if e["state"] == "matched"]
     util.emit("log", msg=f"匹配到 {r['matched']} 个输出，写入中 {r['writing']}，未找到 {r['unmatched']}")
     for i, e in enumerate(todo, 1):
@@ -274,7 +280,7 @@ def finish(cfg, m):
             a = e["probe"]
             a["size"] = Path(e["src_now"]).stat().st_size
             b = probe.summarize(cfg, e["output"])
-            checks = verify.compare(cfg, m["line"], a, b, e["bucket"])
+            checks = verify.compare(cfg, m["line"], a, b, e["bucket"], e.get("subgroup", ""))
             if not checks["时长"]["ok"]:
                 # 时长对不上：很可能配错了，不写元数据，退回未匹配
                 e.setdefault("rejected", []).append(e["output"])
@@ -287,8 +293,9 @@ def finish(cfg, m):
             e["out_probe"] = b
             e["checks"] = checks
             e["state"], e["has_warn"] = verify.verdict(checks)
-            if e["state"] == "verified":
+            if e["state"] == "verified" and not e.get("learned"):
                 estimate.learn(cfg, m, e)
+                e["learned"] = True
         except Exception as ex:
             e["state"] = "failed"
             e["checks"] = {"处理": {"ok": False, "level": "fail", "detail": str(ex)[:300]}}

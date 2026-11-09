@@ -8,7 +8,7 @@ from collections import Counter
 
 
 def _dims_ok(a, b):
-    """原样、旋转 90°（宽高互换）、等比缩小都算对。返回 (ok, 说明)。"""
+    """原样、旋转 90°（宽高互换）、等比缩小、裁黑边都算对。返回 (ok, 说明)。"""
     aw, ah, bw, bh = a.get("width", 0), a.get("height", 0), b.get("width", 0), b.get("height", 0)
     if not (aw and ah and bw and bh):
         return False, "读不到分辨率"
@@ -19,10 +19,14 @@ def _dims_ok(a, b):
     for (w, h) in ((bw, bh), (bh, bw)):
         if w <= aw and h <= ah and abs(aw / ah - w / h) < 0.02:
             return True, f"{aw}×{ah} → {bw}×{bh}（已缩放）"
+    # HandBrake 自动裁黑边：两边都不超过原片，且保留至少 60% 面积
+    for (w, h) in ((bw, bh), (bh, bw)):
+        if w <= aw and h <= ah and w * h >= 0.6 * aw * ah:
+            return True, f"{aw}×{ah} → {bw}×{bh}（裁掉黑边）"
     return False, f"{aw}×{ah} → {bw}×{bh}"
 
 
-def compare(cfg, line, a, b, bucket="compress"):
+def compare(cfg, line, a, b, bucket="compress", subgroup=""):
     """a=原片 probe，b=输出 probe。返回 checks。转封装（remux）体积允许 +2%。"""
     c = {}
     tol = max(cfg["duration_tolerance_s"], a.get("duration", 0) * cfg["duration_tolerance_pct"] / 100)
@@ -34,6 +38,11 @@ def compare(cfg, line, a, b, bucket="compress"):
     size_ok = sb <= sa * 1.02 if bucket == "remux" else sb < sa
     c["体积"] = {"ok": size_ok, "level": "warn",
                  "detail": f"{sa / 2**20:.1f} → {sb / 2**20:.1f} MB" + ("" if size_ok else "（输出比原片还大）")}
+    want = (subgroup or "").lower()
+    if want in ("mp4", "mkv"):
+        is_mkv = "matroska" in (b.get("container") or "")
+        if is_mkv != (want == "mkv"):
+            c["容器"] = {"ok": False, "level": "warn", "detail": f"应为 {want.upper()}，实际 {'MKV' if is_mkv else 'MP4'}"}
     if b.get("codec") not in ("hevc", "av1"):
         c["编码"] = {"ok": False, "level": "warn", "detail": f"输出编码是 {b.get('codec')}"}
 

@@ -132,7 +132,7 @@ private struct BucketCard: View {
 // 列宽
 private enum Col {
     static let check: CGFloat = 24
-    static let bucket: CGFloat = 112
+    static let bucket: CGFloat = 124
     static let size: CGFloat = 74
     static let est: CGFloat = 74
     static let ratio: CGFloat = 84
@@ -143,7 +143,7 @@ private enum Col {
 private struct ReviewHeaderRow: View {
     var body: some View {
         HStack(spacing: 12) {
-            Color.clear.frame(width: Col.check)
+            Color.clear.frame(width: Col.check, height: 1)   // 只给宽度时 Color 会把整行撑满可用高度
             Text(T("col.file")).frame(maxWidth: .infinity, alignment: .leading)
             Text(T("col.bucket")).frame(width: Col.bucket, alignment: .leading)
             Text(T("col.size")).frame(width: Col.size, alignment: .trailing)
@@ -154,7 +154,9 @@ private struct ReviewHeaderRow: View {
         }
         .font(Typo.captionMedium)
         .foregroundStyle(Palette.text3)
+        .lineLimit(1)
         .padding(.horizontal, 28).padding(.vertical, 8)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -181,6 +183,8 @@ private struct ReviewRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(e.name).font(Typo.bodyMedium).lineLimit(1).truncationMode(.middle)
+                        .layoutPriority(1)   // 文件名优先，编码/分辨率先被截
+                        .help(e.name)
                     Text([e.probe?.codec, e.probe?.resolution].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(Typo.caption).foregroundStyle(Palette.text3).lineLimit(1)
                 }
@@ -197,7 +201,12 @@ private struct ReviewRow: View {
                     Button(nb.title) { Task { await model.setBucket(ids: [e.id], bucket: nb) } }
                 }
             } label: {
-                Pill(text: b.title, color: b.color)
+                HStack(spacing: 4) {
+                    Pill(text: b.title, color: b.color)
+                    if let sg = e.subgroup, !sg.isEmpty, e.bucket == "compress" {
+                        Pill(text: sg, color: Palette.text2)
+                    }
+                }
             }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             .frame(width: Col.bucket, alignment: .leading)

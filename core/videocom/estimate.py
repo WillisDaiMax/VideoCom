@@ -8,7 +8,8 @@ estimate.py — 预估输出大小、耗时、压缩率、性价比。
   性价比       = 预计节省 MB ÷ 预计分钟
 
 初始参数按作者的实测标定（2026-11-09）：
-  电影 VideoToolbox HEVC 10-bit CQ56：7.06 GB→1.84 GB / 7 分钟，1.44 GB→826 MB / 7 分钟，1.17 GB→687 MB / 3.5 分钟
+  电影 VideoToolbox HEVC 10-bit（HandBrake）：7.06 GB→1.84 GB / 7 分钟，1.44 GB→826 MB / 7 分钟，1.17 GB→687 MB / 3.5 分钟
+  2026-11-09 第一批 27 部（720p–1080p h264）：大小 实际÷预估 中位 1.03，耗时 2.3 倍 → px_per_s 8.5e8 改为 3.7e8
   一般视频 Aagedal：IMG_1035 13.4 MB→2.6 MB（原 bpp 0.15 → 约 0.03）
 每批收尾后，把"实际 ÷ 预估"记进 history.json；同一条线有 3 条以上记录后，用最近 20 条的中位数修正。
 """
@@ -21,6 +22,8 @@ from . import config
 
 HISTORY = config.USER_CONFIG.parent / "history.json"
 MB = 2 ** 20
+# 默认参数改动时加 1：旧参数下记录的"实际 ÷ 预估"不能再用来修正新参数（否则重复修正）
+MODEL = 2
 
 
 def _hist():
@@ -31,7 +34,7 @@ def _hist():
 
 
 def _correction(line, key):
-    xs = [h[key] for h in _hist() if h.get("line") == line and h.get(key)][-20:]
+    xs = [h[key] for h in _hist() if h.get("line") == line and h.get(key) and h.get("model") == MODEL][-20:]
     return statistics.median(xs) if len(xs) >= 3 else 1.0, len(xs)
 
 
@@ -95,7 +98,7 @@ def learn(cfg, m, e):
     if not r:
         return
     out = Path(e["output"])
-    rec = {"line": m["line"], "codec": (e.get("probe") or {}).get("codec"), "t": int(time.time())}
+    rec = {"line": m["line"], "codec": (e.get("probe") or {}).get("codec"), "t": int(time.time()), "model": MODEL}
     actual = (e.get("out_probe") or {}).get("size") or out.stat().st_size
     if r["out_size"] > 0:
         rec["k_size"] = round(actual / r["out_size"], 3)

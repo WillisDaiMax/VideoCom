@@ -111,6 +111,49 @@ class Flow(unittest.TestCase):
         self.assertFalse(e["checks"]["字幕"]["ok"])
         self.assertEqual(batch.cleanup_candidates(m), [])
 
+    def test_movie_no_subs_mp4_and_crop(self):
+        """无字幕电影 → 待压缩/MP4；HandBrake 裁黑边不算失败；容器不对只提醒；失败的再次收尾会重新校验。"""
+        src = self.tmp / "src"
+        src.mkdir()
+        ff(*SRC, "-t", "3", "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-b:v", "8M", "-c:a", "aac",
+           "-shortest", src / "Clip.mp4")
+        m = batch.scan(self.cfg, "movie", [src], self.tmp, name="M2")
+        e = m["entries"][0]
+        self.assertEqual((e["bucket"], e["subgroup"]), ("compress", "MP4"))
+        self.assertIn("movie_mp4", [r["k"] for r in e["reason_codes"]])
+        batch.apply(self.cfg, m)
+        f = Path(m["dirs"]["compress"]) / "MP4" / "Clip.mp4"
+        self.assertTrue(f.exists())
+        out = Path(m["dirs"]["output"])
+        # 裁掉上下黑边，但容器错用了 MKV
+        ff("-i", f, "-vf", "crop=iw:ih-40", "-c:v", "libx265", "-x265-params", "log-level=error",
+           "-b:v", "300k", "-c:a", "copy", out / "Clip.mkv")
+        batch.finish(self.cfg, m)
+        e = m["entries"][0]
+        self.assertEqual(e["state"], "verified", e["checks"])
+        self.assertIn("裁掉黑边", e["checks"]["分辨率"]["detail"])
+        self.assertFalse(e["checks"]["容器"]["ok"])
+        self.assertTrue(e["has_warn"])
+
+    def test_dims_crop_rules(self):
+        from videocom.verify import _dims_ok
+        self.assertTrue(_dims_ok({"width": 1280, "height": 720}, {"width": 1112, "height": 720})[0])
+        self.assertTrue(_dims_ok({"width": 972, "height": 1720}, {"width": 970, "height": 1458})[0])
+        self.assertFalse(_dims_ok({"width": 1920, "height": 1080}, {"width": 960, "height": 400})[0])
+        self.assertFalse(_dims_ok({"width": 1280, "height": 720}, {"width": 1920, "height": 1080})[0])
+
+
+class TestStrings(unittest.TestCase):
+    def test_every_reason_has_four_languages(self):
+        """界面 Strings.swift 里每个原因代码都要有简/繁/英/日四种文案。"""
+        import re
+        from videocom.classify import REASONS_ZH
+        swift = (Path(__file__).resolve().parents[2] / "app/Sources/VideoCom/Strings.swift").read_text(encoding="utf-8")
+        for k in REASONS_ZH:
+            m = re.search(r'^\s*"' + re.escape(k) + r'":\s*\[(.*?)\],?\s*$', swift, re.M | re.S)
+            self.assertIsNotNone(m, f"Strings.swift 缺少 reason {k}")
+            self.assertEqual(len(re.findall(r'"(?:[^"\\]|\\.)*"', m.group(1))), 4, k)
+
 
 if __name__ == "__main__":
     unittest.main()

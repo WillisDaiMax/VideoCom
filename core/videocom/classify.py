@@ -62,7 +62,24 @@ REASONS_ZH = {
     "hint_movie": "提示：这个文件更像电影资源",
     "hint_daily": "提示：这个文件像手机/相机拍摄",
     "br_estimated": "视频码率为估算值",
+    "movie_mp4": "没有字幕和附件，输出 MP4（Apple 设备可直接播放）",
+    "movie_mkv_subs": "有字幕，输出 MKV",
+    "movie_mkv_fonts": "有字体附件，输出 MKV",
+    "movie_mkv_audio": "音轨 {codecs} 放不进 MP4，输出 MKV",
 }
+
+
+def movie_container(cfg, s):
+    """电影线：没有字幕、没有附件、音轨 MP4 都放得下 → mp4；否则 mkv。返回 (容器, [(原因代码, 参数)])。"""
+    why = []
+    if s.get("subs"):
+        why.append(("movie_mkv_subs", {}))
+    if s.get("attachments"):
+        why.append(("movie_mkv_fonts", {}))
+    bad = sorted({a.get("codec") or "?" for a in s.get("audio", [])} - set(cfg.get("movie_mp4_audio", [])))
+    if bad:
+        why.append(("movie_mkv_audio", {"codecs": "/".join(bad)}))
+    return ("mkv", why) if why else ("mp4", [])
 
 
 def classify(cfg, line, path):
@@ -94,6 +111,9 @@ def classify(cfg, line, path):
     target = cfg["target_container"][line]
     # 按扩展名判断容器：ffprobe 对 MOV 和 MP4 报同一个 format_name，分不出来
     in_target = path.suffix.lower() in {"mp4": (".mp4", ".m4v"), "mkv": (".mkv",)}[target]
+    split = line == "movie" and cfg.get("movie_split_container", True)
+    if split and movie_container(cfg, s)[0] == "mp4" and path.suffix.lower() in (".mp4", ".m4v"):
+        in_target = True      # 无字幕的电影本来就是 MP4：HEVC 不必再转封装成 MKV
     hi = cfg["bpp_efficient_high"][line]
 
     # ---- 基础判定 ----
@@ -144,6 +164,15 @@ def classify(cfg, line, path):
             rec["subgroup"] = "HDR" if is_hdr else "SDR"
         if is_hdr:
             add("hdr_tonemap")
+
+    # ---- 电影：按字幕分 MP4 / MKV 两个子文件夹，方便在 HandBrake 里用两个预设 ----
+    if bucket == "compress" and split:
+        c, why = movie_container(cfg, s)
+        rec["subgroup"] = c.upper()
+        if c == "mp4":
+            add("movie_mp4")
+        for k, p in why:
+            add(k, **p)
 
     # ---- 线别提示（不改桶） ----
     if line == "daily" and (s.get("attachments") or len(s.get("subs", [])) > 1 or s["duration"] > 40 * 60):
