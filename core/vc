@@ -1,0 +1,3 @@
+#!/bin/bash
+# 命令行快捷方式：./vc scan --line daily --src ~/Movies/iPhone --root ~/Movies
+PYTHONPATH="$(cd "$(dirname "$0")" && pwd)" exec python3 -m videocom "$@"
